@@ -37,6 +37,6 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/junforever/n8n-nodes-rate-limit.git"
+    "url": "git+https://github.com/junforever/n8n-nodes-rate-limit.git"
   }
 }
