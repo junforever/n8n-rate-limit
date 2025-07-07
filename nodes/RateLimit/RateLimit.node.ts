@@ -6,6 +6,28 @@ import {
 } from 'n8n-workflow';
 import Redis from 'ioredis';
 
+type RedisClient = InstanceType<typeof Redis>;
+
+type RedisCredential = {
+  host: string;
+  port: number;
+  ssl?: boolean;
+  database: number;
+  user?: string;
+  password?: string;
+};
+
+function setupRedisClient(credentials: RedisCredential): RedisClient {
+  return new Redis({
+    host: credentials.host,
+    port: credentials.port,
+    tls: credentials.ssl ? {} : undefined,
+    db: credentials.database,
+    username: credentials.user || undefined,
+    password: credentials.password || undefined,
+  });
+}
+
 export class RateLimit implements INodeType {
   description: INodeTypeDescription = {
     displayName: 'Rate Limit',
@@ -22,7 +44,7 @@ export class RateLimit implements INodeType {
     outputNames: ['Not Exceeded', 'Exceeded'],
     credentials: [
       {
-        name: 'redisRateLimitApi',
+        name: 'redis',
         required: true,
       },
     ],
@@ -97,14 +119,8 @@ export class RateLimit implements INodeType {
           break;
       }
 
-      const credentials = await this.getCredentials('redisRateLimitApi', i);
-      const redis = new Redis({
-        host: credentials.host as string,
-        port: credentials.port as number,
-        username: credentials.user as string,
-        password: credentials.password as string,
-        db: credentials.database as number,
-      });
+      const credentials = await this.getCredentials('redis');
+      const redis = setupRedisClient(credentials as RedisCredential);
 
       try {
         const pipeline = redis.pipeline();

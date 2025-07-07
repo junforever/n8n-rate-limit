@@ -19,9 +19,7 @@
   },
   "n8n": {
     "n8nNodesApiVersion": 1,
-    "credentials": [
-      "dist/credentials/RedisRateLimitApi.credentials.js"
-    ],
+    "credentials": [],
     "nodes": [
       "dist/nodes/RateLimit/RateLimit.node.js"
     ]
