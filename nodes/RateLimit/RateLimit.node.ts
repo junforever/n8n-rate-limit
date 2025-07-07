@@ -10,7 +10,7 @@ export class RateLimit implements INodeType {
   description: INodeTypeDescription = {
     displayName: 'Rate Limit',
     name: 'rateLimit',
-    icon: 'fa:gauge-high',
+    icon: 'file:icon.svg',
     group: ['transform'],
     version: 1,
     description: 'Limits the rate of executions using Redis.',
