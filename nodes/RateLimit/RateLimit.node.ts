@@ -3,9 +3,6 @@ import {
   INodeType,
   INodeTypeDescription,
   INodeExecutionData,
-  ICredentialTestFunctions,
-  ICredentialsDecrypted,
-  INodeCredentialTestResult,
 } from 'n8n-workflow';
 import Redis from 'ioredis';
 
@@ -28,28 +25,8 @@ function setupRedisClient(credentials: RedisCredential): RedisClient {
     db: credentials.database,
     username: credentials.user || undefined,
     password: credentials.password || undefined,
+    showFriendlyErrorStack: true,
   });
-}
-
-async function redisConnectionTest(
-  this: ICredentialTestFunctions,
-  credential: ICredentialsDecrypted,
-): Promise<INodeCredentialTestResult> {
-  const credentials = credential.data as RedisCredential;
-  const redis = setupRedisClient(credentials);
-  try {
-    await redis.ping();
-    await redis.quit();
-    return {
-      status: 'OK',
-      message: 'Connection successful',
-    };
-  } catch (error) {
-    return {
-      status: 'Error',
-      message: error instanceof Error ? error.message : 'Unknown error',
-    };
-  }
 }
 
 export class RateLimit implements INodeType {
@@ -70,7 +47,6 @@ export class RateLimit implements INodeType {
       {
         name: 'redis',
         required: true,
-        testedBy: 'redisConnectionTest',
       },
     ],
     properties: [
@@ -115,62 +91,50 @@ export class RateLimit implements INodeType {
     ],
   };
 
-  methods = {
-    credentialTest: { redisConnectionTest },
-  };
-
   async execute(this: IExecuteFunctions): Promise<INodeExecutionData[][]> {
     const items = this.getInputData();
     const notExceededItems: INodeExecutionData[] = [];
     const exceededItems: INodeExecutionData[] = [];
 
-    for (let i = 0; i < items.length; i++) {
-      const key = this.getNodeParameter('key', i, '') as string;
-      const limit = this.getNodeParameter('limit', i, 60) as number;
-      const timePeriod = this.getNodeParameter('timePeriod', i, 1) as number;
-      const timeUnit = this.getNodeParameter(
-        'timeUnit',
-        i,
-        'minutes',
-      ) as string;
+    const credentials = await this.getCredentials('redis');
+    if (!credentials) {
+      throw new Error('Redis credentials are not configured for this node.');
+    }
 
-      let ttlInSeconds: number;
-      switch (timeUnit) {
-        case 'hours':
-          ttlInSeconds = timePeriod * 3600;
-          break;
-        case 'days':
-          ttlInSeconds = timePeriod * 86400;
-          break;
-        case 'minutes':
-        default:
-          ttlInSeconds = timePeriod * 60;
-          break;
-      }
+    const redis = setupRedisClient(credentials as RedisCredential);
+    try {
+      for (let i = 0; i < items.length; i++) {
+        const key = this.getNodeParameter('key', i, '') as string;
+        const limit = this.getNodeParameter('limit', i, 60) as number;
+        const timePeriod = this.getNodeParameter('timePeriod', i, 1) as number;
+        const timeUnit = this.getNodeParameter(
+          'timeUnit',
+          i,
+          'minutes',
+        ) as string;
 
-      const credentials = await this.getCredentials('redis');
-      const redis = setupRedisClient(credentials as RedisCredential);
-
-      try {
-        const pipeline = redis.pipeline();
-        pipeline.incr(key);
-        pipeline.ttl(key);
-        const results = await pipeline.exec();
-
-        if (!results) {
-          throw new Error('Failed to execute Redis pipeline');
+        if (!key) {
+          notExceededItems.push(items[i]);
+          continue;
         }
 
-        const countResult = results[0];
-        const ttlResult = results[1];
+        let ttlInSeconds: number;
+        switch (timeUnit) {
+          case 'hours':
+            ttlInSeconds = timePeriod * 3600;
+            break;
+          case 'days':
+            ttlInSeconds = timePeriod * 86400;
+            break;
+          case 'minutes':
+          default:
+            ttlInSeconds = timePeriod * 60;
+            break;
+        }
 
-        if (countResult[0]) throw countResult[0];
-        if (ttlResult[0]) throw ttlResult[0];
+        const count = await redis.incr(key);
 
-        const count = countResult[1] as number;
-        const ttl = ttlResult[1] as number;
-
-        if (ttl === -1) {
+        if (count === 1) {
           await redis.expire(key, ttlInSeconds);
         }
 
@@ -179,9 +143,9 @@ export class RateLimit implements INodeType {
         } else {
           exceededItems.push(items[i]);
         }
-      } finally {
-        await redis.quit();
       }
+    } finally {
+      await redis.quit();
     }
 
     return [
