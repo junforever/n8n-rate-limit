@@ -3,6 +3,9 @@ import {
   INodeType,
   INodeTypeDescription,
   INodeExecutionData,
+  ICredentialTestFunctions,
+  ICredentialsDecrypted,
+  INodeCredentialTestResult,
 } from 'n8n-workflow';
 import Redis from 'ioredis';
 
@@ -28,6 +31,27 @@ function setupRedisClient(credentials: RedisCredential): RedisClient {
   });
 }
 
+async function redisConnectionTest(
+  this: ICredentialTestFunctions,
+  credential: ICredentialsDecrypted,
+): Promise<INodeCredentialTestResult> {
+  const credentials = credential.data as RedisCredential;
+  const redis = setupRedisClient(credentials);
+  try {
+    await redis.ping();
+    await redis.quit();
+    return {
+      status: 'OK',
+      message: 'Connection successful',
+    };
+  } catch (error) {
+    return {
+      status: 'Error',
+      message: error instanceof Error ? error.message : 'Unknown error',
+    };
+  }
+}
+
 export class RateLimit implements INodeType {
   description: INodeTypeDescription = {
     displayName: 'Rate Limit',
@@ -46,6 +70,7 @@ export class RateLimit implements INodeType {
       {
         name: 'redis',
         required: true,
+        testedBy: 'redisConnectionTest',
       },
     ],
     properties: [
@@ -88,6 +113,10 @@ export class RateLimit implements INodeType {
         description: 'The unit of time for the time window.',
       },
     ],
+  };
+
+  methods = {
+    credentialTest: { redisConnectionTest },
   };
 
   async execute(this: IExecuteFunctions): Promise<INodeExecutionData[][]> {
