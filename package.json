@@ -1,6 +1,6 @@
 {
   "name": "n8n-nodes-rate-limit",
-  "version": "1.6.3",
+  "version": "1.7.0",
   "description": "n8n community node for rate limit using Redis",
   "license": "MIT",
   "author": "junforever",
