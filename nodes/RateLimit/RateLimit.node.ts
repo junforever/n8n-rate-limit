@@ -40,8 +40,8 @@ export class RateLimit implements INodeType {
     defaults: {
       name: 'Rate Limit',
     },
-    inputs: ['main'],
-    outputs: ['main', 'main'],
+    inputs: ['main'] as unknown as any,
+    outputs: ['main', 'main'] as unknown as any,
     outputNames: ['Not Exceeded', 'Exceeded'],
     credentials: [
       {
