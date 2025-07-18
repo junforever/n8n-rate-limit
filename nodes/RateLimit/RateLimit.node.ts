@@ -3,6 +3,7 @@ import {
   INodeType,
   INodeTypeDescription,
   INodeExecutionData,
+  NodeOperationError,
 } from 'n8n-workflow';
 import Redis from 'ioredis';
 
@@ -98,12 +99,16 @@ export class RateLimit implements INodeType {
 
     const credentials = await this.getCredentials('redis');
     if (!credentials) {
-      throw new Error('Redis credentials are not configured for this node.');
+      throw new NodeOperationError(
+        this.getNode(),
+        'Redis credentials are not configured for this node.',
+      );
     }
 
     const redis = setupRedisClient(credentials as RedisCredential);
+    let i = 0;
     try {
-      for (let i = 0; i < items.length; i++) {
+      for (i = 0; i < items.length; i++) {
         const key = this.getNodeParameter('key', i, '') as string;
         const limit = this.getNodeParameter('limit', i, 60) as number;
         const timePeriod = this.getNodeParameter('timePeriod', i, 1) as number;
@@ -144,6 +149,14 @@ export class RateLimit implements INodeType {
           exceededItems.push(items[i]);
         }
       }
+    } catch (error) {
+      throw new NodeOperationError(
+        this.getNode(),
+        `Rate limit operation failed: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+        { itemIndex: i },
+      );
     } finally {
       await redis.quit();
     }

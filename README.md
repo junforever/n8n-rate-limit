@@ -9,7 +9,7 @@ This is a custom node for n8n that allows you to implement a rate-limiting mecha
 - **Dual Outputs**: Easily branch your workflow based on whether the rate limit has been exceeded or not.
 - **Standard Redis Credentials**: Uses a dedicated credential type for easy configuration.
 
-## Installation
+## Installation on local n8n instance
 
 1.  Clone this repository.
 2.  Navigate to the repository's root directory.
@@ -20,25 +20,35 @@ This is a custom node for n8n that allows you to implement a rate-limiting mecha
     - Run `npm link n8n-nodes-rate-limit` in your n8n installation directory.
 6.  Restart your n8n instance.
 
+## Installation on n8n cloud
+
+1. Go to the n8n Settings.
+2. Select the "Community nodes" menu.
+3. Click on the "Install" button.
+4. Enter the package name: `n8n-nodes-rate-limit`.
+5. Click on the "Install" button.
+6. Restart your n8n instance.
+
 ## How to Use
 
 After installation, you will find the **Rate Limit** node under the "Transform" section.
 
 ### Credentials
 
-First, you'll need to configure your Redis credentials. Select "Redis Rate Limit API" from the credentials dropdown and fill in your Redis connection details (host, port, password, etc.).
+First, you'll need to configure your Redis credentials. Select the corresponding Redis credential from the credentials dropdown or create a new one and fill in your Redis connection details (host, port, password, etc.).
 
 ### Parameters
 
--   **Redis Key**: The unique key used to store the counter in Redis. You can use n8n expressions here to make the key dynamic. For example, to limit based on a user ID from an incoming webhook, you could use `rate-limit-{{ $json.body.userId }}`.
--   **Limit**: The maximum number of requests allowed within the specified time window. For example, `100`.
--   **Time Period**: The duration of the time window. For example, `15`.
--   **Time Unit**: The unit for the time period. The options are `Minutes`, `Hours`, or `Days`.
+- **Redis Key**: The unique key used to store the counter in Redis. You can use n8n expressions here to make the key dynamic. For example, to limit based on a user ID from an incoming webhook, you could use `rate-limit-{{ $json.body.userId }}`.
+- **Limit**: The maximum number of requests allowed within the specified time window. For example, `100`.
+- **Time Period**: The duration of the time window. For example, `15`.
+- **Time Unit**: The unit for the time period. The options are `Minutes`, `Hours`, or `Days`.
 
 **Example Configuration**: To allow a user 100 requests every 15 minutes, you would set:
--   **Limit**: `100`
--   **Time Period**: `15`
--   **Time Unit**: `Minutes`
+
+- **Limit**: `100`
+- **Time Period**: `15`
+- **Time Unit**: `Minutes`
 
 ### Outputs
 

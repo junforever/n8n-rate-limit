@@ -1,6 +1,6 @@
 {
   "name": "n8n-nodes-rate-limit",
-  "version": "1.7.0",
+  "version": "1.7.1",
   "description": "n8n community node for rate limit using Redis",
   "license": "MIT",
   "author": "junforever",
@@ -36,6 +36,6 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/junforever/n8n-nodes-rate-limit.git"
+    "url": "git+https://github.com/junforever/n8n-rate-limit.git"
   }
 }
