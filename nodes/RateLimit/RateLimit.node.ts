@@ -5,6 +5,7 @@ import {
   INodeExecutionData,
   NodeOperationError,
 } from 'n8n-workflow';
+import crypto from 'crypto';
 import Redis from 'ioredis';
 
 type RedisClient = InstanceType<typeof Redis>;
@@ -30,6 +31,37 @@ function setupRedisClient(credentials: RedisCredential): RedisClient {
   });
 }
 
+const incrExpireScript = `
+  local current = redis.call("INCR", KEYS[1])
+  if current == 1 then
+    redis.call("EXPIRE", KEYS[1], ARGV[1])
+  end
+  return current
+`;
+
+const blockAndResetScript = `
+  redis.call("SET", KEYS[1], "", "EX", ARGV[1], "NX")
+  redis.call("DEL", KEYS[2])
+  return true
+`;
+
+async function runScript(
+  redis: Redis,
+  script: string,
+  keys: string[],
+  args: string[],
+) {
+  const sha1 = crypto.createHash('sha1').update(script).digest('hex');
+  try {
+    return await redis.evalsha(sha1, keys.length, ...keys, ...args);
+  } catch (err: any) {
+    if (err.message.includes('NOSCRIPT')) {
+      return await redis.eval(script, keys.length, ...keys, ...args);
+    }
+    throw err;
+  }
+}
+
 export class RateLimit implements INodeType {
   description: INodeTypeDescription = {
     displayName: 'Rate Limit',
@@ -52,7 +84,7 @@ export class RateLimit implements INodeType {
     ],
     properties: [
       {
-        displayName: 'Redis Key',
+        displayName: 'Redis Limit Counter Key',
         name: 'key',
         type: 'string',
         default: '',
@@ -89,6 +121,35 @@ export class RateLimit implements INodeType {
         default: 'minutes',
         description: 'The unit of time for the time window.',
       },
+      {
+        displayName: 'Redis Block Key',
+        name: 'blockKey',
+        type: 'string',
+        default: '',
+        required: true,
+        description:
+          'The base key for the block time. Can use expressions to make it dynamic (e.g., `rate-limit-block-{{ $json.userId }}`)',
+      },
+      {
+        displayName: 'Block Time Period',
+        name: 'blockTimePeriod',
+        type: 'number',
+        typeOptions: { minValue: 1 },
+        default: 1,
+        description: 'The duration of the block time window.',
+      },
+      {
+        displayName: 'Block Time Unit',
+        name: 'blockTimeUnit',
+        type: 'options',
+        options: [
+          { name: 'Minutes', value: 'minutes' },
+          { name: 'Hours', value: 'hours' },
+          { name: 'Days', value: 'days' },
+        ],
+        default: 'minutes',
+        description: 'The unit of time for the block time window.',
+      },
     ],
   };
 
@@ -117,10 +178,28 @@ export class RateLimit implements INodeType {
           i,
           'minutes',
         ) as string;
+        const blockKey = this.getNodeParameter('blockKey', i, '') as string;
+        const blockTimePeriod = this.getNodeParameter(
+          'blockTimePeriod',
+          i,
+          1,
+        ) as number;
+        const blockTimeUnit = this.getNodeParameter(
+          'blockTimeUnit',
+          i,
+          'minutes',
+        ) as string;
 
         if (!key) {
           notExceededItems.push(items[i]);
           continue;
+        }
+
+        if (!blockKey) {
+          throw new NodeOperationError(
+            this.getNode(),
+            'Block key is required.',
+          );
         }
 
         let ttlInSeconds: number;
@@ -137,15 +216,42 @@ export class RateLimit implements INodeType {
             break;
         }
 
-        const count = await redis.incr(key);
-
-        if (count === 1) {
-          await redis.expire(key, ttlInSeconds);
+        let ttlBlockInSeconds: number;
+        switch (blockTimeUnit) {
+          case 'hours':
+            ttlBlockInSeconds = blockTimePeriod * 3600;
+            break;
+          case 'days':
+            ttlBlockInSeconds = blockTimePeriod * 86400;
+            break;
+          case 'minutes':
+          default:
+            ttlBlockInSeconds = blockTimePeriod * 60;
+            break;
         }
+
+        const blockKeyExists = await redis.exists(blockKey);
+        if (blockKeyExists) {
+          exceededItems.push(items[i]);
+          continue;
+        }
+
+        const count = (await runScript(
+          redis,
+          incrExpireScript,
+          [key],
+          [ttlInSeconds.toString()],
+        )) as number;
 
         if (count <= limit) {
           notExceededItems.push(items[i]);
-        } else {
+        } else if (count === limit + 1) {
+          await runScript(
+            redis,
+            blockAndResetScript,
+            [blockKey, key],
+            [ttlBlockInSeconds.toString()],
+          );
           exceededItems.push(items[i]);
         }
       }

@@ -6,6 +6,8 @@ This is a custom node for n8n that allows you to implement a rate-limiting mecha
 
 - **Flexible Time Windows**: Configure limits per minute, hour, or day.
 - **Dynamic Keys**: Use n8n expressions to create unique rate-limiting keys for different users, IP addresses, or any other data from your workflow.
+- **Custom Block Duration**: Configure a specific duration to block requests after the limit is reached, independent of the rate limit window.
+- **Atomic Operations**: Uses Lua scripts to ensure rate limiting and blocking operations are atomic and accurate to prevent race conditions.
 - **Dual Outputs**: Easily branch your workflow based on whether the rate limit has been exceeded or not.
 - **Standard Redis Credentials**: Uses a dedicated credential type for easy configuration.
 
@@ -43,12 +45,17 @@ First, you'll need to configure your Redis credentials. Select the corresponding
 - **Limit**: The maximum number of requests allowed within the specified time window. For example, `100`.
 - **Time Period**: The duration of the time window. For example, `15`.
 - **Time Unit**: The unit for the time period. The options are `Minutes`, `Hours`, or `Days`.
+- **Redis Block Key**: The unique key used to store the block status in Redis. Like the main key, this supports expressions (e.g., `rate-limit-block-{{ $json.body.userId }}`).
+- **Block Time Period**: The duration to block requests _after_ the limit is reached.
+- **Block Time Unit**: The unit for the block time period.
 
-**Example Configuration**: To allow a user 100 requests every 15 minutes, you would set:
+**Example Configuration**: To allow a user 100 requests every 15 minutes, but block them for 1 hour if they exceed that limit:
 
 - **Limit**: `100`
 - **Time Period**: `15`
 - **Time Unit**: `Minutes`
+- **Block Time Period**: `1`
+- **Block Time Unit**: `Hours`
 
 ### Outputs
 
